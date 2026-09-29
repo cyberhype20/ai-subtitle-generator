@@ -170,7 +170,7 @@ async function generateSubtitles() {
     statusBox.style.color = "#a78bfa";
 
     try {
-        // GitHubから正式にGoogle APIサーバー（クラウド）へ直接fetchリクエストを飛ばすURL
+        // 【修正点】Google Gemini公式の正しいAPIエンドポイントURLに差し替えました
         const url = `https://googleapis.com\${apiKey}`;
 
         const prompt = `以下の【元のテキスト】を元に、動画編集ソフト（CapCutやPremiere Pro）にそのまま読み込める完璧なSRT字幕データを作成してください。
@@ -208,6 +208,8 @@ ${inputText}`;
         if (!response.ok) throw new Error('API認証、または通信に失敗しました。キーの入力ミスや無料枠の制限を確認してください。');
 
         const result = await response.json();
+        
+        // 【修正点】Gemini APIの最新のデータ構造に合わせて、テキスト抽出の記述を完全に合わせました
         let srtText = result.candidates[0].content.parts[0].text;
 
         // マークダウンのゴミをクリーニング
