@@ -77,7 +77,7 @@ video{display:block;width:100%;max-height:62vh;background:#000}
     <h1>🎬 Gemini AI 動画字幕翻訳</h1>
     <div class="sub">動画 → Gemini → 字幕編集 → SRT</div>
   </div>
-  <div class="header-actions"><button id="copyBtn" class="secondary" disabled>📋 SRTをコピー</button><button id="exportBtn" class="secondary" disabled>💾 SRTを保存</button><button id="videoExportBtn" class="video-btn" disabled>🎬 軽量動画保存</button></div>
+  <div class="header-actions"><button id="copyBtn" class="secondary" disabled>📋 SRTをコピー</button><button id="exportBtn" class="secondary" disabled>💾 SRTを保存</button><button id="videoExportBtn" class="video-btn" disabled>🎬 動画を保存</button></div>
 </header>
 
 <div class="grid">
@@ -127,7 +127,7 @@ video{display:block;width:100%;max-height:62vh;background:#000}
       <label for="apiKey">Gemini API Key</label>
       <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off" style="width:100%">
       <div class="small">Google AI Studioで取得したAPIキーを入力してください。キーはこのブラウザからGeminiへ送信されます。</div>
-      <div class="mobile-tip">📱 スマホではSRT書き出し時に「共有」が使える場合があります。iPhoneなら共有先から「ファイルに保存」を選べます。</div>
+      <div class="mobile-tip">📱 スマホでは動画をMP4で保存できる場合、共有メニューから「ビデオを保存」または「ファイルに保存」が選べます。</div>
       <div class="warning">公開サイトで運用する場合、APIキーを自分のキーとして埋め込まない構成を検討してください。この版ではユーザー自身がキーを入力する方式です。</div>
     </div>
   </section>
@@ -258,8 +258,6 @@ function updateActiveSubtitle(){
     overlayText.textContent="";
     subtitleOverlay.classList.remove("show");
   }
-  const activeEl=document.querySelector(".subtitle.active");
-  if(activeEl && !activeEl.matches(":hover")) activeEl.scrollIntoView({block:"nearest"});
 }
 
 overlayPosition.addEventListener("change",()=>{
@@ -435,15 +433,27 @@ copyButton.addEventListener("click",copySRT);
 
 
 function setExportProgress(v){exportProgress.style.width=Math.max(0,Math.min(100,v))+"%"}
+function isIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
 function pickRecorderMime(){
-  const candidates=[
-    "video/mp4;codecs=h264,aac",
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm"
+  const mp4Candidates=[
+    'video/mp4;codecs="avc1.424028,mp4a.40.2"',
+    'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+    'video/mp4'
   ];
-  if(!window.MediaRecorder?.isTypeSupported)return "";
-  return candidates.find(x=>MediaRecorder.isTypeSupported(x))||"";
+  const webmCandidates=[
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
+  if(!window.MediaRecorder)return "";
+  const supported=x=>!MediaRecorder.isTypeSupported || MediaRecorder.isTypeSupported(x);
+  const mp4=mp4Candidates.find(supported);
+  if(mp4)return mp4;
+  // iPhone/iPadの写真アプリ向けにはWebMを出さない。SafariはMP4/H.264/AACをサポート。
+  if(isIOS())return "";
+  return webmCandidates.find(supported)||"";
 }
 function canvasFont(canvas){return `800 ${Math.max(18,Math.round(canvas.width*0.028))}px -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif`}
 function drawExportSubtitle(ctx,canvas,text,position){
@@ -473,17 +483,29 @@ function drawExportSubtitle(ctx,canvas,text,position){
 }
 function activeSubtitleAt(t){return subtitleData.find(s=>t>=s.startSec && t<s.endSec)||null}
 async function saveBlob(blob,filename){
+  const isMp4=blob.type.toLowerCase().includes("mp4") || /\.mp4$/i.test(filename);
   try{
-    const file=new File([blob],filename,{type:blob.type||"video/mp4"});
-    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
-      await navigator.share({files:[file],title:filename});
-      status("✅ 動画を共有しました。iPhoneなら共有先から「ファイルに保存」を選べます。","success");return true;
+    const file=new File([blob],filename,{type:isMp4?"video/mp4":blob.type||"video/webm"});
+    const canShare=!!navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}));
+    if(canShare){
+      await navigator.share({files:[file],title:filename,text:isMp4?"字幕入り動画":"字幕入り動画"});
+      status(isMp4?"✅ 動画を共有しました。iPhoneなら共有先の「ビデオを保存」で写真アプリに保存できます。":"✅ 動画を共有しました。","success");
+      return true;
     }
-  }catch(e){if(e?.name==="AbortError"){status("動画の共有をキャンセルしました。","error");return false}}
-  const url=URL.createObjectURL(blob),a=document.createElement("a");
-  a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),5000);
-  status("✅ 動画の保存を開始しました。","success");return true;
+  }catch(e){
+    if(e?.name==="AbortError"){status("動画の共有をキャンセルしました。","error");return false}
+  }
+  try{
+    const url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url;a.download=filename;a.rel="noopener";a.style.display="none";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    status(isMp4?"✅ MP4動画の保存を開始しました。":"✅ 動画の保存を開始しました。","success");
+    return true;
+  }catch(e){
+    status("⚠️ 動画を保存できませんでした。共有メニューから保存を試してください。","error");
+    return false;
+  }
 }
 async function exportVideo(){
   if(!subtitleData.length){status("⚠️ 先に字幕を生成してください。","error");return}
@@ -492,7 +514,11 @@ async function exportVideo(){
     status("⚠️ このブラウザはブラウザ内動画書き出しに対応していません。SRT保存をご利用ください。","error");return;
   }
   const mime=pickRecorderMime();
-  if(!mime){status("⚠️ このブラウザで利用できる動画書き出し形式がありません。","error");return}
+  if(!mime){
+    if(isIOS()) status("⚠️ このiPhone/iPadのブラウザでは、写真アプリで扱えるMP4動画の書き出しに対応していません。SRT保存は利用できます。","error");
+    else status("⚠️ このブラウザで利用できる動画書き出し形式がありません。","error");
+    return;
+  }
   const wasPaused=player.paused; const oldTime=player.currentTime; const oldMuted=player.muted;
   const sourceW=player.videoWidth,sourceH=player.videoHeight;
   const light=videoQuality.value==="light";
@@ -540,7 +566,11 @@ async function exportVideo(){
   const ext=mime.includes("mp4")?"mp4":"webm";
   const original=videoInput.files[0]?.name||"video";const base=original.replace(/\.[^/.]+$/i,"");
   const blob=new Blob(chunks,{type:mime});
-  await saveBlob(blob,`${base}_subtitle_${light?"light":"hq"}.${ext}`);
+  if(isIOS() && ext!=="mp4"){
+    status("⚠️ iPhone/iPadでは写真アプリ用MP4が作れなかったため、WebMは保存しませんでした。","error");
+  }else{
+    await saveBlob(blob,`${base}_subtitle_${light?"light":"hq"}.${ext}`);
+  }
   player.pause();player.currentTime=Math.min(oldTime,player.duration||0);player.muted=oldMuted;if(!wasPaused)player.play().catch(()=>{});
   setExportProgress(100);videoExportButton.disabled=false;exportButton.disabled=false;
 }
@@ -653,7 +683,7 @@ startButton.addEventListener("click",async()=>{
     exportButton.disabled=false;
     copyButton.disabled=false;
     progress(100);
-    status(`✅ 字幕を読み込みました。\n\n${subtitleData.length}件の字幕を編集できます。\n必要なら「SRTを書き出す」から保存してください。`,"success");
+    status(`✅ 字幕を読み込みました。\n\n${subtitleData.length}件を動画上で確認できます。\n動画を再生すると発言ごとに字幕が自動で切り替わります。必要なら下のタイムラインで文章を編集できます。`,"success");
   }catch(error){
     console.error(error);
     progress(0);
