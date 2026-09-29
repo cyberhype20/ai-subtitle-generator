@@ -61,7 +61,7 @@ video{display:block;width:100%;max-height:62vh;background:#000}
 .settings-grid{display:grid;grid-template-columns:1fr 220px;gap:12px}
 .small{font-size:12px;color:var(--muted);line-height:1.6;margin-top:6px}
 .mobile-tip{margin-top:10px;padding:10px;border-radius:9px;background:#151733;color:#c7c9dc;font-size:12px;line-height:1.6}
-.video-btn{background:#00a884}.video-btn:hover{background:#008f70}.export-box{margin:12px 14px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#111326}.export-box summary{cursor:pointer;font-weight:700}.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.export-grid label{font-size:12px;color:var(--muted)}.export-grid select{width:100%;margin-top:5px}.export-note{font-size:12px;color:var(--muted);line-height:1.55;margin-top:9px}.export-progress{height:5px;background:#292b45;border-radius:99px;overflow:hidden;margin-top:8px}.export-progress>div{height:100%;width:0;background:#00a884;transition:.15s}.warning{margin-top:12px;padding:11px;border-radius:9px;background:#241d16;color:#e6b98c;font-size:12px;line-height:1.6}
+.video-btn{background:#00a884}.video-btn:hover{background:#008f70}.long-video-box{margin:12px 14px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#111326}.long-video-box strong{display:block;margin-bottom:5px}.long-video-box .small{line-height:1.55}.export-box{margin:12px 14px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#111326}.export-box summary{cursor:pointer;font-weight:700}.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.export-grid label{font-size:12px;color:var(--muted)}.export-grid select{width:100%;margin-top:5px}.export-note{font-size:12px;color:var(--muted);line-height:1.55;margin-top:9px}.export-progress{height:5px;background:#292b45;border-radius:99px;overflow:hidden;margin-top:8px}.export-progress>div{height:100%;width:0;background:#00a884;transition:.15s}.warning{margin-top:12px;padding:11px;border-radius:9px;background:#241d16;color:#e6b98c;font-size:12px;line-height:1.6}
 @media(max-width:900px){
   .grid{grid-template-columns:1fr}
   .timeline{max-height:none}
@@ -136,6 +136,10 @@ video{display:block;width:100%;max-height:62vh;background:#000}
     <div class="editor-head">
       <strong>📝 字幕タイムライン</strong>
       <span id="count" class="count">0 件</span>
+    </div>
+    <div class="long-video-box">
+      <strong>⏱ 長時間動画</strong>
+      <div class="small">15分を超える動画は自動で10分前後の区間に分けてGeminiへ順番に解析し、字幕を1本に結合します。元動画をブラウザ側で分割・再エンコードしないので、通常の処理よりブラウザへの負荷を増やしにくい方式です。</div>
     </div>
     <div class="export-box">
   <details>
@@ -604,22 +608,80 @@ async function waitForVideo(ai,uploaded){
   throw new Error("動画処理がタイムアウトしました。");
 }
 
-async function generateSRT(ai,videoFile,language){
-  status("🤖 Gemini 3.8 Flashが動画を解析しています...\n\n動画の長さによって時間がかかります。");
-  progress(50);
-  const prompt=`
+function formatPromptTime(sec){
+  const ms=Math.max(0,Math.round(sec*1000));
+  const h=Math.floor(ms/3600000); const m=Math.floor(ms%3600000/60000); const ss=Math.floor(ms%60000/1000); const x=ms%1000;
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}.${String(x).padStart(3,"0")}`;
+}
+
+function normalizeCueText(text){
+  return String(text||"").replace(/\s+/g," ").trim().toLowerCase().replace(/[。、！？!?.,]/g,"");
+}
+
+function mergeChunkCues(allCues){
+  const sorted=[...allCues].sort((a,b)=>a.startSec-b.startSec||a.endSec-b.endSec);
+  const merged=[];
+  for(const cue of sorted){
+    const prev=merged[merged.length-1];
+    if(prev){
+      const sameText=normalizeCueText(prev.text)===normalizeCueText(cue.text);
+      const close=Math.abs(prev.startSec-cue.startSec)<=3.5;
+      const overlap=Math.min(prev.endSec,cue.endSec)-Math.max(prev.startSec,cue.startSec);
+      if((sameText&&close)||(sameText&&overlap>0)){
+        prev.startSec=Math.min(prev.startSec,cue.startSec);
+        prev.endSec=Math.max(prev.endSec,cue.endSec);
+        prev.start=secToSrt(prev.startSec); prev.end=secToSrt(prev.endSec);
+        continue;
+      }
+    }
+    merged.push({...cue});
+  }
+  merged.forEach((x,i)=>x.id=i+1);
+  return merged;
+}
+
+async function generateSRT(ai,videoFile,language,duration){
+  const LONG_THRESHOLD=15*60;
+  const CHUNK_SECONDS=10*60;
+  const OVERLAP_SECONDS=3;
+  const isLong=duration>LONG_THRESHOLD;
+  const ranges=[];
+  if(!isLong){
+    ranges.push({start:0,end:duration});
+  }else{
+    for(let start=0;start<duration;start+=CHUNK_SECONDS){
+      const end=Math.min(duration,start+CHUNK_SECONDS);
+      ranges.push({start:Math.max(0,start-(start>0?OVERLAP_SECONDS:0)),end});
+      if(end>=duration)break;
+    }
+  }
+
+  const allCues=[];
+  for(let index=0;index<ranges.length;index++){
+    const range=ranges[index];
+    const label=isLong?`区間 ${index+1}/${ranges.length}（${formatPromptTime(range.start)} ～ ${formatPromptTime(range.end)}）`:`動画全体（${formatPromptTime(duration)}）`;
+    status(`🤖 Gemini 3.8 Flashが動画を解析しています...\n\n${label}\n${isLong?"長時間動画モード：区間ごとに解析して自動結合しています。":"動画の長さによって時間がかかります。"}`);
+    const baseProgress=50+(index/ranges.length)*38;
+    progress(baseProgress);
+
+    const prompt=`
 あなたはプロの字幕制作AIです。
 
-アップロードされた動画を最初から最後まで確認してください。
+アップロードされた動画のうち、${formatPromptTime(range.start)} から ${formatPromptTime(range.end)} の時間帯だけを詳しく確認してください。
+${range.start>0?"前後の発話が自然につながるよう、区間の先頭には少し重複時間があります。重複部分も確認して構いません。":""}
 動画内の実際の音声を聞き取り、音声の開始時間と終了時間を判断し、その字幕を ${language} に翻訳してください。
 
-最終出力はSRT形式だけにしてください。
+【タイムコードの最重要ルール】
+・タイムコードは「動画全体の絶対時間」で記録する
+・区間の開始を 00:00:00 に戻さない
+・例えば動画の10分00秒付近を処理している場合、その字幕は 00:10:00,000 付近から始める
+・指定区間と無関係な時間の字幕は作らない
+・指定区間の境界をまたぐ発話は、実際の音声に合わせて自然な開始・終了時間にする
 
-【重要なルール】
+【字幕ルール】
 ・動画の実際の音声を使用する
 ・動画の実際の時間情報を使用する
 ・タイムコードを適当に推測しない
-・動画の最初から最後まで処理する
 ・発話のない時間には字幕を作らない
 ・長すぎる字幕は適切に分割する
 ・自然で読みやすい${language}に翻訳する
@@ -632,27 +694,52 @@ Markdownコードブロックは禁止。
 説明文は禁止。
 最終回答はSRT本文だけにしてください。
 `;
-  const interaction=await ai.interactions.create({
-    model:MODEL,
-    input:[
-      {type:"text",text:prompt},
-      {type:"video",uri:videoFile.uri,mime_type:videoFile.mimeType}
-    ],
-    generation_config:{thinking_level:"low"}
-  });
-  progress(85);
-  let text=interaction.output_text||"";
-  if(!text&&Array.isArray(interaction.steps)){
-    for(const step of interaction.steps){
-      if(Array.isArray(step.content)){
-        for(const item of step.content){
-          if(item.type==="text")text+=item.text||"";
+
+    let raw="";
+    let lastError=null;
+    for(let retry=0;retry<2;retry++){
+      try{
+        const interaction=await ai.interactions.create({
+          model:MODEL,
+          input:[
+            {type:"text",text:prompt},
+            {type:"video",uri:videoFile.uri,mime_type:videoFile.mimeType}
+          ],
+          generation_config:{thinking_level:"low"}
+        });
+        raw=interaction.output_text||"";
+        if(!raw&&Array.isArray(interaction.steps)){
+          for(const step of interaction.steps){
+            if(Array.isArray(step.content)) for(const item of step.content) if(item.type==="text") raw+=item.text||"";
+          }
+        }
+        if(!raw.trim())throw new Error("Geminiから字幕が返ってきませんでした。");
+        lastError=null;break;
+      }catch(e){
+        lastError=e;
+        if(retry===0){
+          status(`⚠️ ${label} の解析を再試行しています...`);
+          await sleep(1500);
         }
       }
     }
+    if(lastError)throw lastError;
+
+    const cues=parseSRT(cleanSRT(raw));
+    const maxEnd=Math.max(...cues.map(x=>x.endSec),0);
+    const rangeLength=range.end-range.start;
+    // モデルが区間内の相対時間で返した場合だけ、区間開始時刻を補正する。
+    if(range.start>0 && maxEnd<=rangeLength+5){
+      cues.forEach(x=>{x.startSec+=range.start;x.endSec+=range.start;x.start=secToSrt(x.startSec);x.end=secToSrt(x.endSec)});
+    }
+    for(const cue of cues){
+      if(cue.endSec>=range.start-0.5 && cue.startSec<=range.end+0.5) allCues.push(cue);
+    }
+    progress(50+((index+1)/ranges.length)*38);
   }
-  if(!text.trim())throw new Error("Geminiから字幕が返ってきませんでした。");
-  return text;
+  const merged=mergeChunkCues(allCues);
+  if(!merged.length)throw new Error("指定された動画範囲から字幕を生成できませんでした。");
+  return merged;
 }
 
 startButton.addEventListener("click",async()=>{
@@ -673,12 +760,12 @@ startButton.addEventListener("click",async()=>{
     const ai=createClient(apiKey);
     const uploaded=await uploadVideo(ai,video);
     const ready=await waitForVideo(ai,uploaded);
-    const raw=await generateSRT(ai,ready,languageInput.value);
+    const duration=Number.isFinite(player.duration)&&player.duration>0?player.duration:0;
+    const cues=await generateSRT(ai,ready,languageInput.value,duration);
 
     status("📝 SRTを編集可能な字幕データに変換しています...");
     progress(90);
-    const srt=cleanSRT(raw);
-    subtitleData=parseSRT(srt);
+    subtitleData=cues;
     renderTimeline();
     exportButton.disabled=false;
     copyButton.disabled=false;
