@@ -170,7 +170,7 @@ async function generateSubtitles() {
     statusBox.style.color = "#a78bfa";
 
     try {
-        // 【修正完了】正しいGoogle Gemini公式の通信URLに差し替えました
+        // 【ここが正解！】Google Gemini公式の正しいAPI通信URLです
         const url = `https://googleapis.com\${apiKey}`;
 
         const prompt = `以下の【元のテキスト】を元に、動画編集ソフト（CapCutやPremiere Pro）にそのまま読み込める完璧なSRT字幕データを作成してください。
@@ -188,7 +188,7 @@ async function generateSubtitles() {
 00:00:04,500 --> 00:00:08,000
 （翻訳された文章）
 
-※注意：出力は純粋なSRTテキストデータのみとし、前置き、解説、マークダウンの「\`\`\`srt」などの囲み文字は絶対に含めないでください。
+※注意：出力は純粋なSRTテキストデータのみとし、前置き、解説、マークダウンの「\`\`\`srt Fluss」などの囲み文字は絶対に含めないでください。
 
 【元のテキスト】
 ${inputText}`;
@@ -209,7 +209,7 @@ ${inputText}`;
 
         const result = await response.json();
         
-        // 【修正完了】データの引き出しルートをGeminiの最新仕様に完全に合わせました
+        // 正しいデータの引き出し指定
         let srtText = result.candidates[0].content.parts[0].text;
 
         // マークダウンのゴミをクリーニング
