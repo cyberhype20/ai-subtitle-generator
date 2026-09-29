@@ -61,7 +61,7 @@ video{display:block;width:100%;max-height:62vh;background:#000}
 .settings-grid{display:grid;grid-template-columns:1fr 220px;gap:12px}
 .small{font-size:12px;color:var(--muted);line-height:1.6;margin-top:6px}
 .mobile-tip{margin-top:10px;padding:10px;border-radius:9px;background:#151733;color:#c7c9dc;font-size:12px;line-height:1.6}
-.warning{margin-top:12px;padding:11px;border-radius:9px;background:#241d16;color:#e6b98c;font-size:12px;line-height:1.6}
+.video-btn{background:#00a884}.video-btn:hover{background:#008f70}.export-box{margin:12px 14px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#111326}.export-box summary{cursor:pointer;font-weight:700}.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.export-grid label{font-size:12px;color:var(--muted)}.export-grid select{width:100%;margin-top:5px}.export-note{font-size:12px;color:var(--muted);line-height:1.55;margin-top:9px}.export-progress{height:5px;background:#292b45;border-radius:99px;overflow:hidden;margin-top:8px}.export-progress>div{height:100%;width:0;background:#00a884;transition:.15s}.warning{margin-top:12px;padding:11px;border-radius:9px;background:#241d16;color:#e6b98c;font-size:12px;line-height:1.6}
 @media(max-width:900px){
   .grid{grid-template-columns:1fr}
   .timeline{max-height:none}
@@ -77,7 +77,7 @@ video{display:block;width:100%;max-height:62vh;background:#000}
     <h1>🎬 Gemini AI 動画字幕翻訳</h1>
     <div class="sub">動画 → Gemini → 字幕編集 → SRT</div>
   </div>
-  <div class="header-actions"><button id="copyBtn" class="secondary" disabled>📋 SRTをコピー</button><button id="exportBtn" class="secondary" disabled>💾 SRTを保存</button></div>
+  <div class="header-actions"><button id="copyBtn" class="secondary" disabled>📋 SRTをコピー</button><button id="exportBtn" class="secondary" disabled>💾 SRTを保存</button><button id="videoExportBtn" class="video-btn" disabled>🎬 軽量動画保存</button></div>
 </header>
 
 <div class="grid">
@@ -137,7 +137,18 @@ video{display:block;width:100%;max-height:62vh;background:#000}
       <strong>📝 字幕タイムライン</strong>
       <span id="count" class="count">0 件</span>
     </div>
-    <div id="timeline" class="timeline">
+    <div class="export-box">
+  <details>
+    <summary>🎬 動画として保存する設定</summary>
+    <div class="export-grid">
+      <label>画質<select id="videoQuality"><option value="light">スマホ軽量（720p / 30fps）</option><option value="high">高画質（元解像度優先 / 30fps）</option></select></label>
+      <label>字幕位置<select id="exportPosition"><option value="bottom">下</option><option value="center">中央</option></select></label>
+    </div>
+    <div class="export-note">動画保存を押した時だけ映像を再エンコードします。普段の字幕編集・SRT保存には動画エンコードを使いません。元動画ファイルは変更しません。</div>
+    <div class="export-progress"><div id="exportProgress"></div></div>
+  </details>
+</div>
+<div id="timeline" class="timeline">
       <div class="empty">まだ字幕がありません。<br>動画を選択して「字幕を作成」を押してください。</div>
     </div>
   </section>
@@ -156,6 +167,10 @@ const fileInfo=document.getElementById("fileInfo");
 const startButton=document.getElementById("start");
 const exportButton=document.getElementById("exportBtn");
 const copyButton=document.getElementById("copyBtn");
+const videoExportButton=document.getElementById("videoExportBtn");
+const videoQuality=document.getElementById("videoQuality");
+const exportPosition=document.getElementById("exportPosition");
+const exportProgress=document.getElementById("exportProgress");
 const statusBox=document.getElementById("status");
 const progressBar=document.getElementById("progress");
 const player=document.getElementById("player");
@@ -204,6 +219,7 @@ videoInput.addEventListener("change",()=>{
   subtitleData=[];
   renderTimeline();
   exportButton.disabled=true;
+  videoExportButton.disabled=true;
   if(!file){fileInfo.textContent="動画を選択してください。";return}
   const mb=file.size/1024/1024;
   fileInfo.textContent=`${file.name} / ${mb.toFixed(1)} MB`;
@@ -211,7 +227,8 @@ videoInput.addEventListener("change",()=>{
   videoURL=URL.createObjectURL(file);
   player.src=videoURL;
   player.load();
-  status("動画を読み込みました。");
+  videoExportButton.disabled=false;
+  status("動画を読み込みました。字幕生成後にSRT保存と動画保存が使えます。");
 });
 
 player.addEventListener("loadedmetadata",()=>{
@@ -259,6 +276,7 @@ function renderTimeline(){
     return;
   }
   exportButton.disabled=false;
+  videoExportButton.disabled=false;
   timeline.innerHTML="";
   subtitleData.forEach((sub,index)=>{
     const row=document.createElement("div");
@@ -414,6 +432,119 @@ async function copySRT(){
 }
 exportButton.addEventListener("click",downloadSRT);
 copyButton.addEventListener("click",copySRT);
+
+
+function setExportProgress(v){exportProgress.style.width=Math.max(0,Math.min(100,v))+"%"}
+function pickRecorderMime(){
+  const candidates=[
+    "video/mp4;codecs=h264,aac",
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm"
+  ];
+  if(!window.MediaRecorder?.isTypeSupported)return "";
+  return candidates.find(x=>MediaRecorder.isTypeSupported(x))||"";
+}
+function canvasFont(canvas){return `800 ${Math.max(18,Math.round(canvas.width*0.028))}px -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif`}
+function drawExportSubtitle(ctx,canvas,text,position){
+  if(!text)return;
+  const maxWidth=canvas.width*.88;
+  ctx.font=canvasFont(canvas); ctx.textAlign="center"; ctx.textBaseline="middle";
+  const words=text.split(/\n/); const lines=[];
+  for(const part of words){
+    let line="";
+    for(const ch of part){
+      const test=line+ch;
+      if(ctx.measureText(test).width>maxWidth && line){lines.push(line);line=ch}else line=test;
+    }
+    lines.push(line);
+  }
+  const lineH=Math.max(28,canvas.width*.038), total=lines.length*lineH;
+  const y=position==="center"?canvas.height/2:canvas.height*.88-total/2;
+  const pad=12;
+  const widths=lines.map(x=>ctx.measureText(x).width);
+  const boxW=Math.min(maxWidth,Math.max(...widths)+pad*2), boxH=total+pad;
+  ctx.fillStyle="rgba(0,0,0,.45)";ctx.fillRect((canvas.width-boxW)/2,y-boxH/2,boxW,boxH);
+  ctx.lineWidth=Math.max(3,canvas.width*.0035);ctx.strokeStyle="#000";ctx.fillStyle="#fff";
+  lines.forEach((line,i)=>{
+    const yy=y-total/2+lineH/2+i*lineH;
+    ctx.strokeText(line,canvas.width/2,yy);ctx.fillText(line,canvas.width/2,yy);
+  });
+}
+function activeSubtitleAt(t){return subtitleData.find(s=>t>=s.startSec && t<s.endSec)||null}
+async function saveBlob(blob,filename){
+  try{
+    const file=new File([blob],filename,{type:blob.type||"video/mp4"});
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share({files:[file],title:filename});
+      status("✅ 動画を共有しました。iPhoneなら共有先から「ファイルに保存」を選べます。","success");return true;
+    }
+  }catch(e){if(e?.name==="AbortError"){status("動画の共有をキャンセルしました。","error");return false}}
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  status("✅ 動画の保存を開始しました。","success");return true;
+}
+async function exportVideo(){
+  if(!subtitleData.length){status("⚠️ 先に字幕を生成してください。","error");return}
+  if(!player.videoWidth||!player.duration){status("⚠️ 動画を読み込んでから実行してください。","error");return}
+  if(!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream){
+    status("⚠️ このブラウザはブラウザ内動画書き出しに対応していません。SRT保存をご利用ください。","error");return;
+  }
+  const mime=pickRecorderMime();
+  if(!mime){status("⚠️ このブラウザで利用できる動画書き出し形式がありません。","error");return}
+  const wasPaused=player.paused; const oldTime=player.currentTime; const oldMuted=player.muted;
+  const sourceW=player.videoWidth,sourceH=player.videoHeight;
+  const light=videoQuality.value==="light";
+  const targetW=light?Math.min(1280,sourceW):sourceW;
+  const targetH=Math.round(targetW*sourceH/sourceW);
+  const canvas=document.createElement("canvas");canvas.width=targetW;canvas.height=targetH;
+  const ctx=canvas.getContext("2d",{alpha:false});
+  const canvasStream=canvas.captureStream(30);
+  let combined=canvasStream;
+  try{
+    if(typeof player.captureStream==="function"){
+      const sourceStream=player.captureStream();
+      sourceStream.getAudioTracks().forEach(t=>canvasStream.addTrack(t));
+    }
+  }catch(e){}
+  const bitrate=light?2_200_000:Math.min(8_000_000,Math.max(3_500_000,targetW*targetH*0.012));
+  let recorder;
+  try{recorder=new MediaRecorder(combined,{mimeType:mime,videoBitsPerSecond:bitrate,audioBitsPerSecond:128000})}
+  catch(e){recorder=new MediaRecorder(combined)}
+  const chunks=[]; recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};
+  const done=new Promise((resolve,reject)=>{recorder.onstop=()=>resolve();recorder.onerror=e=>reject(e.error||e)});
+  setExportProgress(0);videoExportButton.disabled=true;exportButton.disabled=true;
+  status(`🎬 ${light?"軽量":"高画質"}動画を書き出しています。画面操作は続けられます。\n元動画は変更されません。`);
+  player.pause();player.currentTime=0;player.muted=false;
+  const pos=exportPosition.value;
+  recorder.start(250);
+  const start=performance.now();
+  await new Promise((resolve,reject)=>{
+    let last=0;
+    const frame=()=>{
+      try{
+        ctx.drawImage(player,0,0,targetW,targetH);
+        const sub=activeSubtitleAt(player.currentTime);drawExportSubtitle(ctx,canvas,sub?.text||"",pos);
+        const pct=player.duration?player.currentTime/player.duration*100:0;
+        if(pct-last>1){setExportProgress(pct);last=pct;status(`🎬 動画を書き出しています… ${Math.floor(pct)}%\n${light?"720p軽量モード":"高画質モード"}`)}
+        if(player.ended || player.currentTime>=player.duration-.03){resolve();return}
+        requestAnimationFrame(frame);
+      }catch(e){reject(e)}
+    };
+    player.addEventListener("ended",resolve,{once:true});
+    requestAnimationFrame(frame);
+    player.play().catch(reject);
+  });
+  recorder.stop();await done;
+  const ext=mime.includes("mp4")?"mp4":"webm";
+  const original=videoInput.files[0]?.name||"video";const base=original.replace(/\.[^/.]+$/i,"");
+  const blob=new Blob(chunks,{type:mime});
+  await saveBlob(blob,`${base}_subtitle_${light?"light":"hq"}.${ext}`);
+  player.pause();player.currentTime=Math.min(oldTime,player.duration||0);player.muted=oldMuted;if(!wasPaused)player.play().catch(()=>{});
+  setExportProgress(100);videoExportButton.disabled=false;exportButton.disabled=false;
+}
+videoExportButton.addEventListener("click",()=>exportVideo().catch(e=>{videoExportButton.disabled=false;exportButton.disabled=false;status("⚠️ 動画書き出しに失敗しました。\n"+readableError(e),"error")}));
 
 function createClient(apiKey){return new GoogleGenAI({apiKey})}
 
