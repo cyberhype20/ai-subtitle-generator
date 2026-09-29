@@ -191,7 +191,7 @@ function secToSrt(sec){
   if(mm>=1000){mm=0;ss++}
   if(ss>=60){ss=0;mi++}
   if(mi>=60){mi=0;hh++}
-  return [hh,mi,ss,mm].map((v,i)=>String(v).padStart(i===3?3:2,"0")).join(i===3?",":":");
+  return `${String(hh).padStart(2,"0")}:${String(mi).padStart(2,"0")}:${String(ss).padStart(2,"0")},${String(mm).padStart(3,"0")}`;
 }
 function srtToSec(v){
   const m=v.trim().match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
@@ -329,8 +329,9 @@ function parseSRT(srt){
     const textStart=m.index+m[0].length;
     const textEnd=i+1<matches.length?matches[i+1].index:normalized.length;
     let text=normalized.slice(textStart,textEnd).trim();
-    // 次の字幕番号が本文側に残った場合は除去
-    text=text.replace(/^\s*\d+\s*\n/,'').trim();
+    // 次の字幕番号が本文末尾に残った場合は除去。
+    // Geminiが空行を省略したSRTでも、次のタイムコード直前の番号を正しく除外する。
+    text=text.replace(/\n\s*\d+\s*$/,'').trim();
     if(!text)continue;
     const start=m[1].replace('.',',');
     const end=m[2].replace('.',',');
@@ -372,7 +373,10 @@ async function downloadSRT(){
       return;
     }
   }catch(e){
-    if(e?.name==="AbortError")return;
+    if(e?.name==="AbortError"){
+      status("共有をキャンセルしました。必要ならもう一度「SRTを保存」を押してください。","error");
+      return;
+    }
   }
 
   // 2) 通常のブラウザ保存（PC/Androidなど）
