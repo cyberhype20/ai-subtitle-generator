@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>無料AI字幕翻訳ツール (Gemini Web版)</title>
-    <link href="https://googleapis.com" rel="stylesheet">
     <style>
         :root {
             --bg-color: #0b0f19;
@@ -123,12 +122,12 @@
 
 <div class="container">
     <h2>無料AI字幕翻訳ツール (Gemini Web版)</h2>
-    <div class="subtitle">GitHub公開専用モデル。インターネット経由で大企業のAPI認証を直接突破し、0円で多言語の動画字幕(.srt)を爆速生成します。</div>
+    <div class="subtitle">Google AI Studioから無料で即時発行したキー（AIzaSy...）を直接利用し、ブラウザ上で多言語の動画字幕(.srt)を安全に自動生成します。</div>
     
     <div class="form-group">
         <label>1. Google Gemini API Keyを入力 (完全無料):</label>
         <input type="password" id="apiKey" placeholder="AIzaSy...">
-        <div class="notice">※Google AI Studioから無料で即時発行したキー（AIzaSy...）を貼り付けてください。</div>
+        <div class="notice">※キーは外部のサーバーへ送信されず、あなたのブラウザからGoogle APIへ直接安全に通信されます。</div>
     </div>
 
     <div class="form-group">
@@ -144,10 +143,10 @@
     <div class="form-group">
         <label>3. 文字起こししたテキストを貼り付け:</label>
         <textarea id="inputText" placeholder="（例）こんにちは。今日の動画では新しいAIツールの使い方について分かりやすく解説していきます。"></textarea>
-        <div class="notice">※スマホやアプリ等で自動文字起こしした文章をここに丸ごとコピペしてください。</div>
+        <div class="notice">※自動文字起こしした文章などをここに丸ごとコピペしてください。</div>
     </div>
 
-    <button id="processBtn" onclick="generateSubtitles()">完全無料で字幕ファイルを生成</button>
+    <button id="processBtn" onclick="generateSubtitles()">字幕ファイルを生成</button>
     
     <div id="status"></div>
 </div>
@@ -165,15 +164,17 @@ async function generateSubtitles() {
 
     btn.disabled = true;
     statusBox.style.display = "block";
-    statusBox.innerText = "⏳ 【正規認証中】GitHubの安全な通信ルートからGoogle AIに接続しています...";
+    statusBox.innerText = "⏳ 【認証・通信中】Google AIに接続して字幕を翻訳生成しています...";
     statusBox.style.background = "rgba(139, 92, 246, 0.1)";
     statusBox.style.color = "#a78bfa";
 
     try {
-        // 【ここが正解！】Google Gemini公式の正しいAPI通信URLです
-        const url = `https://googleapis.com\${apiKey}`;
+        // 【ご指定の書き換え部分】
+        const MODEL = "gemini-1.5-flash";
+        const url = "https://generativelanguage." + "googleapis.com" + "/v1beta/models/" + MODEL + ":generateContent?key=" + apiKey;
 
-        const prompt = `以下の【元のテキスト】を元に、動画編集ソフト（CapCutやPremiere Pro）にそのまま読み込める完璧なSRT字幕データを作成してください。
+
+        const prompt = `以下の【元のテキスト】を元に、動画編集ソフトにそのまま読み込める完璧なSRT字幕データを作成してください。
 指示に従って、文章の流れから推測して自然なタイミングでタイムスタンプを割り振ってください。
 
 【翻訳と言語ルール】
@@ -188,7 +189,7 @@ async function generateSubtitles() {
 00:00:04,500 --> 00:00:08,000
 （翻訳された文章）
 
-※注意：出力は純粋なSRTテキストデータのみとし、前置き、解説、マークダウンの「\`\`\`srt Fluss」などの囲み文字は絶対に含めないでください。
+※注意：出力は純粋なSRTテキストデータのみとし、前置き、解説、マークダウンの「\`\`\`srt」などの囲み文字は絶対に含めないでください。
 
 【元のテキスト】
 ${inputText}`;
@@ -205,18 +206,26 @@ ${inputText}`;
             body: JSON.stringify(requestBody)
         });
 
-        if (!response.ok) throw new Error('API認証、または通信に失敗しました。キーの入力ミスや無料枠の制限を確認してください。');
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            const errMsg = errData.error?.message || 'キーの入力ミスや無料枠の制限を確認してください。';
+            throw new Error(`API通信に失敗しました。 ${errMsg}`);
+        }
 
         const result = await response.json();
         
-        // 正しいデータの引き出し指定
-        let srtText = result.candidates[0].content.parts[0].text;
+        // 安全にテキストデータを抽出する構造
+        let srtText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (!srtText) {
+            throw new Error('AIからの応答を正常に受け取れませんでした。もう一度お試しください。');
+        }
 
         // マークダウンのゴミをクリーニング
         srtText = srtText.replace(/```srt/g, "").replace(/```/g, "").trim();
 
         // 正式な.srtファイルとしてブラウザから直接自動ダウンロード
-        const blob = new Blob([srtText], { type: 'text/plain' });
+        const blob = new Blob([srtText], { type: 'text/plain;charset=utf-8' });
         const downloadUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = downloadUrl;
@@ -227,12 +236,12 @@ ${inputText}`;
 
         statusBox.style.background = "rgba(16, 185, 129, 0.1)";
         statusBox.style.color = "#34d399";
-        statusBox.innerText = "✅ 成功！完全無料で翻訳字幕がダウンロードされました！";
+        statusBox.innerText = "✅ 成功！翻訳字幕(.srt)がダウンロードされました！";
 
     } catch (error) {
         statusBox.style.background = "rgba(239, 68, 68, 0.1)";
         statusBox.style.color = "#f87171";
-        statusBox.innerText = "❌ エラー: " + error.message;
+        statusBox.innerText = "❌ " + error.message;
     } finally {
         btn.disabled = false;
     }
