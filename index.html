@@ -2,250 +2,1578 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>無料AI字幕翻訳ツール (Gemini Web版)</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AI動画字幕翻訳ツール</title>
+
     <style>
         :root {
-            --bg-color: #0b0f19;
-            --card-bg: #151f32;
-            --accent-color: #8b5cf6;
+            --bg: #0b0f19;
+            --card: #151f32;
+            --input: #0b0f19;
+            --border: #24334d;
+            --accent: #8b5cf6;
             --accent-hover: #7c3aed;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #24334d;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --success: #34d399;
+            --error: #f87171;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
             margin: 0;
-            padding: 0;
+            padding: 20px;
+
+            min-height: 100vh;
+
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
+
+            background: var(--bg);
+            color: var(--text);
+
+            font-family:
+                Inter,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
         }
 
         .container {
             width: 100%;
-            max-width: 550px;
-            margin: 20px;
-            background: var(--card-bg);
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-            border: 1px solid var(--border-color);
-            box-sizing: border-box;
+            max-width: 700px;
+
+            padding: 32px;
+
+            background: var(--card);
+
+            border: 1px solid var(--border);
+            border-radius: 18px;
+
+            box-shadow:
+                0 20px 50px rgba(0, 0, 0, 0.4);
         }
 
-        h2 {
-            font-size: 24px;
-            font-weight: 700;
-            margin: 0 0 8px 0;
-            background: linear-gradient(to right, #a78bfa, #c084fc);
+        h1 {
+            margin: 0 0 10px;
+
+            font-size: 25px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #a78bfa,
+                    #c084fc
+                );
+
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .subtitle {
+        .description {
+            margin-bottom: 30px;
+
+            color: var(--muted);
+
             font-size: 14px;
-            color: var(--text-muted);
-            margin-bottom: 32px;
-            line-height: 1.5;
+            line-height: 1.7;
         }
 
-        .form-group {
+        .group {
             margin-bottom: 24px;
-            text-align: left;
         }
 
         label {
             display: block;
+
+            margin-bottom: 9px;
+
             font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 8px;
+            font-weight: 700;
         }
 
-        input[type="password"], select, textarea {
+        input,
+        select {
             width: 100%;
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: #0b0f19;
-            color: var(--text-main);
+
+            padding: 13px 14px;
+
+            border:
+                1px solid var(--border);
+
+            border-radius: 9px;
+
+            background: var(--input);
+            color: var(--text);
+
             font-size: 14px;
-            box-sizing: border-box;
+
+            outline: none;
         }
 
-        textarea {
-            height: 150px;
-            resize: vertical;
-            font-family: inherit;
+        input:focus,
+        select:focus {
+            border-color: var(--accent);
+        }
+
+        input[type="file"] {
+            padding: 11px;
+        }
+
+        .file-box {
+            padding: 22px;
+
+            border:
+                1px dashed var(--border);
+
+            border-radius: 10px;
+
+            background:
+                rgba(11, 15, 25, 0.7);
+
+            text-align: center;
+        }
+
+        .file-name {
+            margin-top: 12px;
+
+            color: var(--muted);
+
+            font-size: 13px;
+
+            word-break: break-all;
         }
 
         .notice {
-            color: var(--text-muted);
+            margin-top: 7px;
+
+            color: var(--muted);
+
             font-size: 12px;
-            margin-top: 6px;
-            line-height: 1.4;
+            line-height: 1.5;
         }
 
         button {
             width: 100%;
-            background-color: var(--accent-color);
+
+            padding: 15px;
+
+            margin-top: 5px;
+
+            border: 0;
+            border-radius: 9px;
+
+            background: var(--accent);
             color: white;
-            border: none;
-            padding: 14px;
+
             font-size: 16px;
-            font-weight: 600;
-            border-radius: 8px;
+            font-weight: 700;
+
             cursor: pointer;
-            transition: all 0.2s ease;
-            margin-top: 12px;
+
+            transition:
+                background 0.2s,
+                transform 0.1s;
         }
 
-        button:hover { background-color: var(--accent-hover); }
-        button:disabled { background-color: #24334d; color: var(--text-muted); cursor: not-allowed; }
+        button:hover {
+            background: var(--accent-hover);
+        }
+
+        button:active {
+            transform: scale(0.99);
+        }
+
+        button:disabled {
+            background: #24334d;
+
+            color: var(--muted);
+
+            cursor: not-allowed;
+        }
 
         #status {
-            margin-top: 24px;
+            display: none;
+
+            margin-top: 20px;
+
+            padding: 14px;
+
+            border-radius: 9px;
+
             font-size: 14px;
             font-weight: 600;
-            padding: 12px;
-            border-radius: 8px;
+
+            line-height: 1.6;
+        }
+
+        .progress {
             display: none;
+
+            width: 100%;
+
+            height: 6px;
+
+            margin-top: 12px;
+
+            overflow: hidden;
+
+            background: #24334d;
+
+            border-radius: 20px;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+
+            background: var(--accent);
+
+            transition: width 0.3s;
+        }
+
+        .footer {
+            margin-top: 25px;
+            padding-top: 20px;
+
+            border-top:
+                1px solid var(--border);
+
+            color: var(--muted);
+
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        .warning {
+            margin-top: 12px;
+
+            padding: 12px;
+
+            border-radius: 8px;
+
+            background:
+                rgba(245, 158, 11, 0.08);
+
+            color: #fbbf24;
+
+            font-size: 12px;
+
+            line-height: 1.5;
         }
     </style>
 </head>
+
 <body>
 
 <div class="container">
-    <h2>無料AI字幕翻訳ツール (Gemini Web版)</h2>
-    <div class="subtitle">Google AI Studioから無料で即時発行したキー（AIzaSy...）を直接利用し、ブラウザ上で多言語の動画字幕(.srt)を安全に自動生成します。</div>
-    
-    <div class="form-group">
-        <label>1. Google Gemini API Keyを入力 (完全無料):</label>
-        <input type="password" id="apiKey" placeholder="AIzaSy...">
-        <div class="notice">※キーは外部のサーバーへ送信されず、あなたのブラウザからGoogle APIへ直接安全に通信されます。</div>
+
+    <h1>
+        AI動画字幕翻訳ツール
+    </h1>
+
+    <div class="description">
+        動画をアップロードすると、Geminiが動画の音声を解析し、
+        指定した言語へ翻訳してSRT字幕を生成します。
     </div>
 
-    <div class="form-group">
-        <label>2. 翻訳先の言語を選択:</label>
+
+    <!-- API KEY -->
+
+    <div class="group">
+
+        <label for="apiKey">
+            1. Gemini API Key
+        </label>
+
+        <input
+            type="password"
+            id="apiKey"
+            placeholder="AIzaSy..."
+            autocomplete="off"
+        >
+
+        <div class="notice">
+            APIキーはこのブラウザからGoogle APIへ直接送信されます。
+            公開サイトとして配布する場合はAPIキーを埋め込まないでください。
+        </div>
+
+    </div>
+
+
+    <!-- LANGUAGE -->
+
+    <div class="group">
+
+        <label for="targetLanguage">
+            2. 翻訳先の言語
+        </label>
+
         <select id="targetLanguage">
-            <option value="日本語">日本語に翻訳 (Japanese)</option>
-            <option value="英語">英語に翻訳 (English)</option>
-            <option value="スペイン語">スペイン語に翻訳 (Spanish)</option>
-            <option value="中国語">中国語に翻訳 (Chinese)</option>
+
+            <option value="日本語">
+                日本語
+            </option>
+
+            <option value="英語">
+                English
+            </option>
+
+            <option value="韓国語">
+                한국어
+            </option>
+
+            <option value="中国語（簡体字）">
+                简体中文
+            </option>
+
+            <option value="中国語（繁体字）">
+                繁體中文
+            </option>
+
+            <option value="スペイン語">
+                Español
+            </option>
+
+            <option value="フランス語">
+                Français
+            </option>
+
+            <option value="ドイツ語">
+                Deutsch
+            </option>
+
+            <option value="イタリア語">
+                Italiano
+            </option>
+
+            <option value="ポルトガル語">
+                Português
+            </option>
+
         </select>
+
     </div>
 
-    <div class="form-group">
-        <label>3. 文字起こししたテキストを貼り付け:</label>
-        <textarea id="inputText" placeholder="（例）こんにちは。今日の動画では新しいAIツールの使い方について分かりやすく解説していきます。"></textarea>
-        <div class="notice">※自動文字起こしした文章などをここに丸ごとコピペしてください。</div>
+
+    <!-- VIDEO -->
+
+    <div class="group">
+
+        <label for="videoFile">
+            3. 動画ファイル
+        </label>
+
+        <div class="file-box">
+
+            <input
+                type="file"
+                id="videoFile"
+                accept="video/*"
+            >
+
+            <div
+                class="file-name"
+                id="fileName"
+            >
+                動画ファイルを選択してください
+            </div>
+
+        </div>
+
+        <div class="notice">
+            MP4、MOV、WebMなどの一般的な動画形式を使用してください。
+        </div>
+
     </div>
 
-    <button id="processBtn" onclick="generateSubtitles()">字幕ファイルを生成</button>
-    
+
+    <!-- BUTTON -->
+
+    <button
+        id="processBtn"
+        onclick="generateSubtitles()"
+    >
+        🎬 動画から字幕を生成
+    </button>
+
+
+    <!-- STATUS -->
+
     <div id="status"></div>
+
+
+    <!-- PROGRESS -->
+
+    <div
+        class="progress"
+        id="progress"
+    >
+        <div
+            class="progress-bar"
+            id="progressBar"
+        ></div>
+    </div>
+
+
+    <div class="warning">
+        ⚠️ 動画そのものをGeminiへアップロードして解析します。
+        動画サイズや利用可能な無料枠はGoogle側の現在のAPI仕様に依存します。
+    </div>
+
+
+    <div class="footer">
+        Gemini APIを利用して動画の音声・内容を解析します。<br>
+        APIキーの利用料金・無料枠・対応モデルなどはGoogle側の仕様に従います。
+    </div>
+
 </div>
 
+
 <script>
-async function generateSubtitles() {
-    const apiKey = document.getElementById('apiKey').value.trim();
-    const inputText = document.getElementById('inputText').value.trim();
-    const targetLang = document.getElementById('targetLanguage').value;
-    const statusBox = document.getElementById('status');
-    const btn = document.getElementById('processBtn');
 
-    if (!apiKey) { alert('GeminiのAPIキーを入力してください。'); return; }
-    if (!inputText) { alert('テキストを貼り付けてください。'); return; }
+/*
+==================================================
+設定
+==================================================
+*/
 
-    btn.disabled = true;
-    statusBox.style.display = "block";
-    statusBox.innerText = "⏳ 【認証・通信中】Google AIに接続して字幕を翻訳生成しています...";
-    statusBox.style.background = "rgba(139, 92, 246, 0.1)";
-    statusBox.style.color = "#a78bfa";
+const MODEL =
+    "gemini-2.5-flash";
 
-    try {
-        // 【ご指定の書き換え部分】
-        const MODEL = "gemini-1.5-flash-latest";
-        const url = "https://generativelanguage." + "googleapis.com" + "/v1beta/models/" + MODEL + ":generateContent?key=" + apiKey;
+const API_BASE =
+    "https://generativelanguage.googleapis.com";
 
 
-        const prompt = `以下の【元のテキスト】を元に、動画編集ソフトにそのまま読み込める完璧なSRT字幕データを作成してください。
-指示に従って、文章の流れから推測して自然なタイミングでタイムスタンプを割り振ってください。
+/*
+==================================================
+DOM
+==================================================
+*/
 
-【翻訳と言語ルール】
-テキスト部分を必ず「\${targetLang}」に翻訳してSRTを作ってください。
+const apiKeyInput =
+    document.getElementById("apiKey");
 
-【SRTフォーマットの死守ルール】
-1
-00:00:01,000 --> 00:00:04,000
-（翻訳された文章）
+const targetLanguage =
+    document.getElementById("targetLanguage");
 
-2
-00:00:04,500 --> 00:00:08,000
-（翻訳された文章）
+const videoFileInput =
+    document.getElementById("videoFile");
 
-※注意：出力は純粋なSRTテキストデータのみとし、前置き、解説、マークダウンの「\`\`\`srt」などの囲み文字は絶対に含めないでください。
+const fileName =
+    document.getElementById("fileName");
 
-【元のテキスト】
-${inputText}`;
+const processBtn =
+    document.getElementById("processBtn");
 
-        const requestBody = {
-            contents: [{
-                parts: [{ text: prompt }]
-            }]
-        };
+const statusBox =
+    document.getElementById("status");
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
+const progress =
+    document.getElementById("progress");
 
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            const errMsg = errData.error?.message || 'キーの入力ミスや無料枠の制限を確認してください。';
-            throw new Error(`API通信に失敗しました。 ${errMsg}`);
+const progressBar =
+    document.getElementById("progressBar");
+
+
+/*
+==================================================
+ファイル選択表示
+==================================================
+*/
+
+videoFileInput.addEventListener(
+    "change",
+    function () {
+
+        const file =
+            videoFileInput.files[0];
+
+        if (!file) {
+
+            fileName.textContent =
+                "動画ファイルを選択してください";
+
+            return;
         }
 
-        const result = await response.json();
-        
-        // 安全にテキストデータを抽出する構造
-        let srtText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        if (!srtText) {
-            throw new Error('AIからの応答を正常に受け取れませんでした。もう一度お試しください。');
-        }
+        fileName.textContent =
+            file.name +
+            " (" +
+            formatFileSize(file.size) +
+            ")";
 
-        // マークダウンのゴミをクリーニング
-        srtText = srtText.replace(/```srt/g, "").replace(/```/g, "").trim();
+    }
+);
 
-        // 正式な.srtファイルとしてブラウザから直接自動ダウンロード
-        const blob = new Blob([srtText], { type: 'text/plain;charset=utf-8' });
-        const downloadUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = "translated_subtitles_" + targetLang + ".srt";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
 
-        statusBox.style.background = "rgba(16, 185, 129, 0.1)";
-        statusBox.style.color = "#34d399";
-        statusBox.innerText = "✅ 成功！翻訳字幕(.srt)がダウンロードされました！";
+/*
+==================================================
+ファイルサイズ表示
+==================================================
+*/
 
-    } catch (error) {
-        statusBox.style.background = "rgba(239, 68, 68, 0.1)";
-        statusBox.style.color = "#f87171";
-        statusBox.innerText = "❌ " + error.message;
-    } finally {
-        btn.disabled = false;
+function formatFileSize(bytes) {
+
+    if (bytes < 1024) {
+
+        return bytes + " B";
+    }
+
+    if (bytes < 1024 * 1024) {
+
+        return (
+            bytes / 1024
+        ).toFixed(1) + " KB";
+    }
+
+    if (bytes < 1024 * 1024 * 1024) {
+
+        return (
+            bytes /
+            (1024 * 1024)
+        ).toFixed(1) + " MB";
+    }
+
+    return (
+        bytes /
+        (1024 * 1024 * 1024)
+    ).toFixed(2) + " GB";
+}
+
+
+/*
+==================================================
+ステータス
+==================================================
+*/
+
+function showStatus(
+    message,
+    type = "info"
+) {
+
+    statusBox.style.display =
+        "block";
+
+    statusBox.textContent =
+        message;
+
+
+    if (type === "success") {
+
+        statusBox.style.background =
+            "rgba(16, 185, 129, 0.1)";
+
+        statusBox.style.color =
+            "#34d399";
+
+    } else if (type === "error") {
+
+        statusBox.style.background =
+            "rgba(239, 68, 68, 0.1)";
+
+        statusBox.style.color =
+            "#f87171";
+
+    } else {
+
+        statusBox.style.background =
+            "rgba(139, 92, 246, 0.1)";
+
+        statusBox.style.color =
+            "#a78bfa";
     }
 }
+
+
+/*
+==================================================
+進捗
+==================================================
+*/
+
+function setProgress(value) {
+
+    progress.style.display =
+        "block";
+
+    progressBar.style.width =
+        Math.max(
+            0,
+            Math.min(
+                100,
+                value
+            )
+        ) + "%";
+}
+
+
+/*
+==================================================
+MIME TYPE
+==================================================
+*/
+
+function getMimeType(file) {
+
+    if (file.type) {
+
+        return file.type;
+    }
+
+    const extension =
+        file.name
+            .split(".")
+            .pop()
+            .toLowerCase();
+
+
+    const mimeTypes = {
+
+        mp4:
+            "video/mp4",
+
+        mov:
+            "video/quicktime",
+
+        webm:
+            "video/webm",
+
+        avi:
+            "video/x-msvideo",
+
+        mpeg:
+            "video/mpeg",
+
+        mpg:
+            "video/mpeg",
+
+        m4v:
+            "video/x-m4v"
+    };
+
+
+    return (
+        mimeTypes[extension] ||
+        "video/mp4"
+    );
+}
+
+
+/*
+==================================================
+Gemini Files API
+==================================================
+*/
+
+async function uploadVideo(
+    apiKey,
+    file
+) {
+
+    /*
+    Resumable upload開始
+    */
+
+    const startUrl =
+        API_BASE +
+        "/upload/v1beta/files?key=" +
+        encodeURIComponent(apiKey);
+
+
+    const startResponse =
+        await fetch(
+            startUrl,
+            {
+                method: "POST",
+
+                headers: {
+
+                    "X-Goog-Upload-Protocol":
+                        "resumable",
+
+                    "X-Goog-Upload-Command":
+                        "start",
+
+                    "X-Goog-Upload-Header-Content-Length":
+                        String(file.size),
+
+                    "X-Goog-Upload-Header-Content-Type":
+                        getMimeType(file),
+
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+
+                    file: {
+
+                        display_name:
+                            file.name
+                    }
+
+                })
+            }
+        );
+
+
+    if (!startResponse.ok) {
+
+        const error =
+            await getApiError(
+                startResponse
+            );
+
+        throw new Error(
+            "動画アップロードの開始に失敗しました: " +
+            error
+        );
+    }
+
+
+    /*
+    アップロードURL取得
+    */
+
+    const uploadUrl =
+        startResponse.headers.get(
+            "X-Goog-Upload-URL"
+        );
+
+
+    if (!uploadUrl) {
+
+        throw new Error(
+            "GoogleからアップロードURLを取得できませんでした。"
+        );
+    }
+
+
+    /*
+    動画本体アップロード
+    */
+
+    showStatus(
+        "⏳ 動画をGeminiへアップロードしています..."
+    );
+
+    setProgress(10);
+
+
+    const uploadResponse =
+        await fetch(
+            uploadUrl,
+            {
+                method: "PUT",
+
+                headers: {
+
+                    "Content-Length":
+                        String(file.size),
+
+                    "X-Goog-Upload-Offset":
+                        "0",
+
+                    "X-Goog-Upload-Command":
+                        "upload, finalize"
+                },
+
+                body: file
+            }
+        );
+
+
+    if (!uploadResponse.ok) {
+
+        const error =
+            await getApiError(
+                uploadResponse
+            );
+
+        throw new Error(
+            "動画のアップロードに失敗しました: " +
+            error
+        );
+    }
+
+
+    const uploadData =
+        await uploadResponse.json();
+
+
+    if (
+        !uploadData.file ||
+        !uploadData.file.name
+    ) {
+
+        throw new Error(
+            "アップロードされた動画情報を取得できませんでした。"
+        );
+    }
+
+
+    return uploadData.file;
+}
+
+
+/*
+==================================================
+ファイル処理完了待ち
+==================================================
+*/
+
+async function waitForFileReady(
+    apiKey,
+    fileName
+) {
+
+    const url =
+        API_BASE +
+        "/v1beta/" +
+        fileName +
+        "?key=" +
+        encodeURIComponent(apiKey);
+
+
+    for (
+        let i = 0;
+        i < 60;
+        i++
+    ) {
+
+        const response =
+            await fetch(
+                url
+            );
+
+
+        if (!response.ok) {
+
+            const error =
+                await getApiError(
+                    response
+                );
+
+                throw new Error(
+                    "アップロード状態の確認に失敗しました: " +
+                    error
+                );
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            data.state ===
+            "ACTIVE"
+        ) {
+
+            return data;
+        }
+
+
+        if (
+            data.state ===
+            "FAILED"
+        ) {
+
+            throw new Error(
+                "Google側で動画処理に失敗しました。"
+            );
+        }
+
+
+        showStatus(
+            "⏳ 動画を解析可能な状態に準備しています..."
+        );
+
+
+        await sleep(
+            2000
+        );
+    }
+
+
+    throw new Error(
+        "動画の準備に時間がかかりすぎています。"
+    );
+}
+
+
+/*
+==================================================
+Gemini生成
+==================================================
+*/
+
+async function generateFromVideo(
+    apiKey,
+    file,
+    language
+) {
+
+    const url =
+        API_BASE +
+        "/v1beta/models/" +
+        MODEL +
+        ":generateContent?key=" +
+        encodeURIComponent(apiKey);
+
+
+    const prompt = `
+あなたはプロフェッショナルな動画字幕制作者です。
+
+添付された動画を最初から最後まで確認し、
+動画内で話されている音声を認識してください。
+
+認識した音声を
+「${language}」
+へ自然に翻訳してください。
+
+そして、動画の実際の発話タイミングに合わせて
+SRT字幕を作成してください。
+
+【最重要ルール】
+
+1.
+出力は純粋なSRTデータだけにしてください。
+
+2.
+Markdownコードブロックは禁止です。
+
+3.
+説明文、前置き、後書きは禁止です。
+
+4.
+字幕番号は1から順番にしてください。
+
+5.
+タイムスタンプは必ず以下の形式にしてください。
+
+1
+00:00:00,000 --> 00:00:03,500
+字幕本文
+
+2
+00:00:03,500 --> 00:00:07,000
+字幕本文
+
+6.
+動画内の実際の発話時間を基準にしてください。
+
+7.
+発話していない時間帯に無意味な字幕を作らないでください。
+
+8.
+字幕が長くなりすぎないようにしてください。
+
+9.
+読みやすい位置で字幕を分割してください。
+
+10.
+字幕同士のタイムスタンプを重複させないでください。
+
+11.
+字幕の開始・終了時間は動画の内容と一致させてください。
+
+12.
+翻訳は自然な会話表現にしてください。
+
+13.
+原文の意味を勝手に変更しないでください。
+
+14.
+話者が複数いる場合でも、字幕本文だけを出力してください。
+
+15.
+音楽、効果音、無音部分については、
+字幕として必要な場合のみ [音楽]、[拍手] などの
+短い説明を入れてください。
+
+【出力例】
+
+1
+00:00:00,500 --> 00:00:03,200
+こんにちは。今日は新しいAIについて説明します。
+
+2
+00:00:03,400 --> 00:00:06,800
+まず最初に、このツールの使い方を紹介します。
+`;
+
+
+    const requestBody = {
+
+        contents: [
+
+            {
+
+                role: "user",
+
+                parts: [
+
+                    {
+                        text: prompt
+                    },
+
+                    {
+
+                        file_data: {
+
+                            mime_type:
+                                file.mimeType,
+
+                            file_uri:
+                                file.uri
+                        }
+                    }
+
+                ]
+
+            }
+
+        ],
+
+        generationConfig: {
+
+            temperature: 0.1,
+
+            maxOutputTokens: 32768
+        }
+
+    };
+
+
+    const response =
+        await fetch(
+            url,
+            {
+                method: "POST",
+
+                headers: {
+
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body:
+                    JSON.stringify(
+                        requestBody
+                    )
+            }
+        );
+
+
+    if (!response.ok) {
+
+        const error =
+            await getApiError(
+                response
+            );
+
+        throw new Error(
+            "字幕生成に失敗しました: " +
+            error
+        );
+    }
+
+
+    const data =
+        await response.json();
+
+
+    /*
+    レスポンスからテキスト抽出
+    */
+
+    const result =
+        data
+            ?.candidates
+            ?.map(
+                candidate =>
+                    candidate
+                        ?.content
+                        ?.parts
+                        ?.map(
+                            part =>
+                                part.text || ""
+                        )
+                        .join("")
+            )
+            .filter(Boolean)
+            .join("\n");
+
+
+    if (!result) {
+
+        throw new Error(
+            "Geminiから字幕データを取得できませんでした。"
+        );
+    }
+
+
+    return result;
+}
+
+
+/*
+==================================================
+APIエラー取得
+==================================================
+*/
+
+async function getApiError(
+    response
+) {
+
+    try {
+
+        const data =
+            await response.json();
+
+
+        return (
+            data?.error?.message ||
+            "詳細不明のAPIエラー"
+        );
+
+    } catch (e) {
+
+        return (
+            "HTTP " +
+            response.status +
+            " " +
+            response.statusText
+        );
+    }
+}
+
+
+/*
+==================================================
+SRTクリーニング
+==================================================
+*/
+
+function cleanSRT(text) {
+
+    let result =
+        text.trim();
+
+
+    /*
+    Markdown除去
+    */
+
+    result =
+        result.replace(
+            /```srt/gi,
+            ""
+        );
+
+    result =
+        result.replace(
+            /```/g,
+            ""
+        );
+
+
+    result =
+        result.trim();
+
+
+    /*
+    SRTの最初の字幕番号を探す
+    */
+
+    const match =
+        result.match(
+            /\d+\s*\n\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}/
+        );
+
+
+    if (match) {
+
+        result =
+            result.substring(
+                match.index
+            );
+    }
+
+
+    return result.trim();
+}
+
+
+/*
+==================================================
+SRT検証
+==================================================
+*/
+
+function validateSRT(
+    srt
+) {
+
+    const blocks =
+        srt
+            .split(/\n\s*\n/)
+            .filter(Boolean);
+
+
+    if (
+        blocks.length === 0
+    ) {
+
+        return false;
+    }
+
+
+    let validBlocks = 0;
+
+
+    for (
+        const block of blocks
+    ) {
+
+        const lines =
+            block
+                .trim()
+                .split(/\r?\n/);
+
+
+        if (
+            lines.length < 3
+        ) {
+
+            continue;
+        }
+
+
+        const timeLine =
+            lines[1];
+
+
+        const validTime =
+            /^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}$/
+                .test(timeLine);
+
+
+        if (
+            validTime
+        ) {
+
+            validBlocks++;
+        }
+    }
+
+
+    return (
+        validBlocks > 0
+    );
+}
+
+
+/*
+==================================================
+SRTダウンロード
+==================================================
+*/
+
+function downloadSRT(
+    text,
+    language
+) {
+
+    const blob =
+        new Blob(
+            [
+                "\uFEFF",
+                text
+            ],
+            {
+                type:
+                    "text/plain;charset=utf-8"
+            }
+        );
+
+
+    const url =
+        URL.createObjectURL(
+            blob
+        );
+
+
+    const link =
+        document.createElement(
+            "a"
+        );
+
+
+    link.href =
+        url;
+
+
+    link.download =
+        "translated_subtitles_" +
+        language +
+        ".srt";
+
+
+    document.body.appendChild(
+        link
+    );
+
+
+    link.click();
+
+
+    link.remove();
+
+
+    setTimeout(
+        () => {
+            URL.revokeObjectURL(
+                url
+            );
+        },
+        1000
+    );
+}
+
+
+/*
+==================================================
+スリープ
+==================================================
+*/
+
+function sleep(
+    milliseconds
+) {
+
+    return new Promise(
+        resolve =>
+            setTimeout(
+                resolve,
+                milliseconds
+            )
+    );
+}
+
+
+/*
+==================================================
+メイン処理
+==================================================
+*/
+
+async function generateSubtitles() {
+
+    const apiKey =
+        apiKeyInput.value.trim();
+
+
+    const language =
+        targetLanguage.value;
+
+
+    const video =
+        videoFileInput.files[0];
+
+
+    /*
+    入力チェック
+    */
+
+    if (!apiKey) {
+
+        alert(
+            "Gemini APIキーを入力してください。"
+        );
+
+        apiKeyInput.focus();
+
+        return;
+    }
+
+
+    if (!video) {
+
+        alert(
+            "動画ファイルを選択してください。"
+        );
+
+        return;
+    }
+
+
+    /*
+    ボタン無効化
+    */
+
+    processBtn.disabled =
+        true;
+
+
+    setProgress(
+        0
+    );
+
+
+    try {
+
+        /*
+        STEP 1
+        */
+
+        showStatus(
+            "⏳ ① 動画をGeminiへアップロードしています..."
+        );
+
+
+        const uploadedFile =
+            await uploadVideo(
+                apiKey,
+                video
+            );
+
+
+        setProgress(
+            35
+        );
+
+
+        /*
+        STEP 2
+        */
+
+        showStatus(
+            "⏳ ② 動画を解析可能な状態にしています..."
+        );
+
+
+        const readyFile =
+            await waitForFileReady(
+                apiKey,
+                uploadedFile.name
+            );
+
+
+        setProgress(
+            55
+        );
+
+
+        /*
+        STEP 3
+        */
+
+        showStatus(
+            "⏳ ③ 動画の音声を解析して翻訳しています..."
+        );
+
+
+        const srt =
+            await generateFromVideo(
+                apiKey,
+                readyFile,
+                language
+            );
+
+
+        setProgress(
+            90
+        );
+
+
+        /*
+        STEP 4
+        */
+
+        showStatus(
+            "⏳ ④ SRT字幕を整理しています..."
+        );
+
+
+        const cleaned =
+            cleanSRT(
+                srt
+            );
+
+
+        if (
+            !validateSRT(
+                cleaned
+            )
+        ) {
+
+            throw new Error(
+                "Geminiが正しいSRT形式を返しませんでした。"
+            );
+        }
+
+
+        /*
+        STEP 5
+        */
+
+        downloadSRT(
+            cleaned,
+            language
+        );
+
+
+        setProgress(
+            100
+        );
+
+
+        showStatus(
+            "✅ 完了！動画の音声に合わせたSRT字幕をダウンロードしました。",
+            "success"
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            error
+        );
+
+
+        showStatus(
+            "❌ " +
+            (
+                error.message ||
+                "処理中にエラーが発生しました。"
+            ),
+            "error"
+        );
+
+    }
+
+    finally {
+
+        processBtn.disabled =
+            false;
+    }
+}
+
 </script>
 
 </body>
