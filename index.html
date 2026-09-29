@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>無料AI字幕翻訳ツール (Gemini Web版)</title>
+    <link href="https://googleapis.com" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151f32;
+            --accent-color: #8b5cf6;
+            --accent-hover: #7c3aed;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #24334d;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 550px;
+            margin: 20px;
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            box-sizing: border-box;
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            background: linear-gradient(to right, #a78bfa, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        input[type="password"], select, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: #0b0f19;
+            color: var(--text-main);
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            height: 150px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .notice {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+
+        button {
+            width: 100%;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 12px;
+        }
+
+        button:hover { background-color: var(--accent-hover); }
+        button:disabled { background-color: #24334d; color: var(--text-muted); cursor: not-allowed; }
+
+        #status {
+            margin-top: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 12px;
+            border-radius: 8px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>無料AI字幕翻訳ツール (Gemini Web版)</h2>
+    <div class="subtitle">GitHub公開専用モデル。インターネット経由で大企業のAPI認証を直接突破し、0円で多言語の動画字幕(.srt)を爆速生成します。</div>
+    
+    <div class="form-group">
+        <label>1. Google Gemini API Keyを入力 (完全無料):</label>
+        <input type="password" id="apiKey" placeholder="AIzaSy...">
+        <div class="notice">※Google AI Studioから無料で即時発行したキー（AIzaSy...）を貼り付けてください。</div>
+    </div>
+
+    <div class="form-group">
+        <label>2. 翻訳先の言語を選択:</label>
+        <select id="targetLanguage">
+            <option value="日本語">日本語に翻訳 (Japanese)</option>
+            <option value="英語">英語に翻訳 (English)</option>
+            <option value="スペイン語">スペイン語に翻訳 (Spanish)</option>
+            <option value="中国語">中国語に翻訳 (Chinese)</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>3. 文字起こししたテキストを貼り付け:</label>
+        <textarea id="inputText" placeholder="（例）こんにちは。今日の動画では新しいAIツールの使い方について分かりやすく解説していきます。"></textarea>
+        <div class="notice">※スマホやアプリ等で自動文字起こしした文章をここに丸ごとコピペしてください。</div>
+    </div>
+
+    <button id="processBtn" onclick="generateSubtitles()">完全無料で字幕ファイルを生成</button>
+    
+    <div id="status"></div>
+</div>
+
+<script>
+async function generateSubtitles() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const inputText = document.getElementById('inputText').value.trim();
+    const targetLang = document.getElementById('targetLanguage').value;
+    const statusBox = document.getElementById('status');
+    const btn = document.getElementById('processBtn');
+
+    if (!apiKey) { alert('GeminiのAPIキーを入力してください。'); return; }
+    if (!inputText) { alert('テキストを貼り付けてください。'); return; }
+
+    btn.disabled = true;
+    statusBox.style.display = "block";
+    statusBox.innerText = "⏳ 【正規認証中】GitHubの安全な通信ルートからGoogle AIに接続しています...";
+    statusBox.style.background = "rgba(139, 92, 246, 0.1)";
+    statusBox.style.color = "#a78bfa";
+
+    try {
+        // GitHubから正式にGoogle APIサーバー（クラウド）へ直接fetchリクエストを飛ばすURL
+        const url = `https://googleapis.com\${apiKey}`;
+
+        const prompt = `以下の【元のテキスト】を元に、動画編集ソフト（CapCutやPremiere Pro）にそのまま読み込める完璧なSRT字幕データを作成してください。
+指示に従って、文章の流れから推測して自然なタイミングでタイムスタンプを割り振ってください。
+
+【翻訳と言語ルール】
+テキスト部分を必ず「\${targetLang}」に翻訳してSRTを作ってください。
+
+【SRTフォーマットの死守ルール】
+1
+00:00:01,000 --> 00:00:04,000
+（翻訳された文章）
+
+2
+00:00:04,500 --> 00:00:08,000
+（翻訳された文章）
+
+※注意：出力は純粋なSRTテキストデータのみとし、マークダウンの「\`\`\`srt」などの囲み文字は絶対に含めないでください。
+
+【元のテキスト】
+${inputText}`;
+
+        const requestBody = {
+            contents: [{
+                parts: [{ text: prompt }]
+            }]
+        };
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) throw new Error('API認証、または通信に失敗しました。キーの入力ミスや無料枠の制限を確認してください。');
+
+        const result = await response.json();
+        let srtText = result.candidates[0].content.parts[0].text;
+
+        // マークダウンのゴミをクリーニング
+        srtText = srtText.replace(/```srt/g, "").replace(/```/g, "").trim();
+
+        // 正式な.srtファイルとしてブラウザから直接自動ダウンロード
+        const blob = new Blob([srtText], { type: 'text/plain' });
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = "translated_subtitles_" + targetLang + ".srt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        statusBox.style.background = "rgba(16, 185, 129, 0.1)";
+        statusBox.style.color = "#34d399";
+        statusBox.innerText = "✅ 成功！完全無料で翻訳字幕がダウンロードされました！";
+
+    } catch (error) {
+        statusBox.style.background = "rgba(239, 68, 68, 0.1)";
+        statusBox.style.color = "#f87171";
+        statusBox.innerText = "❌ エラー: " + error.message;
+    } finally {
+        btn.disabled = false;
+    }
+}
+</script>
+
+</body>
+</html>
