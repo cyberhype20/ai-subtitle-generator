@@ -30,7 +30,15 @@ button.secondary{background:#292b45}
 button.danger{background:#542430}
 button:disabled{opacity:.5;cursor:not-allowed}
 .player-wrap{background:#090a12;padding:14px}
-video{display:block;width:100%;max-height:62vh;background:#000;border-radius:10px}
+.video-stage{position:relative;background:#000;border-radius:10px;overflow:hidden}
+video{display:block;width:100%;max-height:62vh;background:#000}
+.subtitle-overlay{position:absolute;left:5%;right:5%;z-index:3;display:none;justify-content:center;pointer-events:none;text-align:center}
+.subtitle-overlay.show{display:flex}
+.subtitle-overlay.bottom{bottom:7%}
+.subtitle-overlay.center{top:50%;transform:translateY(-50%)}
+.subtitle-overlay span{display:inline-block;max-width:92%;padding:6px 12px;color:#fff;font-weight:800;font-size:clamp(16px,2.5vw,30px);line-height:1.45;white-space:pre-wrap;text-shadow:0 2px 3px #000,2px 0 2px #000,-2px 0 2px #000,0 -2px 2px #000;background:rgba(0,0,0,.32);border-radius:5px}
+.overlay-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:12px}
+.overlay-controls select{padding:7px 9px}
 .player-info{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:12px;padding-top:10px}
 .status{margin-top:10px;padding:11px;border-radius:9px;background:#111326;color:#c7c9dc;white-space:pre-wrap;font-size:13px;line-height:1.5}
 .status.error{color:#ff9ba6}.status.success{color:#72e2ad}
@@ -52,6 +60,7 @@ video{display:block;width:100%;max-height:62vh;background:#000;border-radius:10p
 .settings{margin-top:18px;padding:14px;background:var(--panel);border:1px solid var(--line);border-radius:16px}
 .settings-grid{display:grid;grid-template-columns:1fr 220px;gap:12px}
 .small{font-size:12px;color:var(--muted);line-height:1.6;margin-top:6px}
+.mobile-tip{margin-top:10px;padding:10px;border-radius:9px;background:#151733;color:#c7c9dc;font-size:12px;line-height:1.6}
 .warning{margin-top:12px;padding:11px;border-radius:9px;background:#241d16;color:#e6b98c;font-size:12px;line-height:1.6}
 @media(max-width:900px){
   .grid{grid-template-columns:1fr}
@@ -68,7 +77,7 @@ video{display:block;width:100%;max-height:62vh;background:#000;border-radius:10p
     <h1>🎬 Gemini AI 動画字幕翻訳</h1>
     <div class="sub">動画 → Gemini → 字幕編集 → SRT</div>
   </div>
-  <button id="exportBtn" class="secondary" disabled>💾 SRTを書き出す</button>
+  <button id="exportBtn" class="secondary" disabled>💾 SRTを保存</button>
 </header>
 
 <div class="grid">
@@ -95,7 +104,19 @@ video{display:block;width:100%;max-height:62vh;background:#000;border-radius:10p
     </div>
 
     <div class="player-wrap">
-      <video id="player" controls playsinline></video>
+      <div class="video-stage">
+        <video id="player" controls playsinline></video>
+        <div id="subtitleOverlay" class="subtitle-overlay bottom"><span id="overlayText"></span></div>
+      </div>
+      <div class="overlay-controls">
+        <strong>動画内字幕プレビュー</strong>
+        <label for="overlayPosition">位置</label>
+        <select id="overlayPosition" aria-label="字幕位置">
+          <option value="bottom">下（標準）</option>
+          <option value="center">中央</option>
+        </select>
+        <label><input id="overlayEnabled" type="checkbox" checked> 表示</label>
+      </div>
       <div class="player-info">
         <span id="currentTime">00:00:00,000</span>
         <span id="duration">00:00:00,000</span>
@@ -106,6 +127,7 @@ video{display:block;width:100%;max-height:62vh;background:#000;border-radius:10p
       <label for="apiKey">Gemini API Key</label>
       <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off" style="width:100%">
       <div class="small">Google AI Studioで取得したAPIキーを入力してください。キーはこのブラウザからGeminiへ送信されます。</div>
+      <div class="mobile-tip">📱 スマホではSRT書き出し時に「共有」が使える場合があります。iPhoneなら共有先から「ファイルに保存」を選べます。</div>
       <div class="warning">公開サイトで運用する場合、APIキーを自分のキーとして埋め込まない構成を検討してください。この版ではユーザー自身がキーを入力する方式です。</div>
     </div>
   </section>
@@ -140,6 +162,10 @@ const timeline=document.getElementById("timeline");
 const countBox=document.getElementById("count");
 const currentTimeBox=document.getElementById("currentTime");
 const durationBox=document.getElementById("duration");
+const subtitleOverlay=document.getElementById("subtitleOverlay");
+const overlayText=document.getElementById("overlayText");
+const overlayPosition=document.getElementById("overlayPosition");
+const overlayEnabled=document.getElementById("overlayEnabled");
 
 let subtitleData=[];
 let videoURL="";
@@ -189,7 +215,10 @@ videoInput.addEventListener("change",()=>{
 
 player.addEventListener("loadedmetadata",()=>{
   durationBox.textContent=secToSrt(player.duration);
+  updateActiveSubtitle();
 });
+player.addEventListener("seeked",updateActiveSubtitle);
+player.addEventListener("pause",updateActiveSubtitle);
 player.addEventListener("timeupdate",()=>{
   currentTimeBox.textContent=secToSrt(player.currentTime);
   updateActiveSubtitle();
@@ -198,15 +227,28 @@ player.addEventListener("timeupdate",()=>{
 function updateActiveSubtitle(){
   let active=-1;
   for(let i=0;i<subtitleData.length;i++){
-    const s=subtitleData[i];
-    if(player.currentTime>=s.startSec && player.currentTime<s.endSec){active=i;break}
+    const sub=subtitleData[i];
+    if(player.currentTime>=sub.startSec && player.currentTime<sub.endSec){active=i;break}
   }
   document.querySelectorAll(".subtitle").forEach((el,i)=>{
     el.classList.toggle("active",i===active);
   });
+  if(overlayEnabled.checked && active>=0){
+    overlayText.textContent=subtitleData[active].text;
+    subtitleOverlay.classList.add("show");
+  }else{
+    overlayText.textContent="";
+    subtitleOverlay.classList.remove("show");
+  }
   const activeEl=document.querySelector(".subtitle.active");
   if(activeEl && !activeEl.matches(":hover")) activeEl.scrollIntoView({block:"nearest"});
 }
+
+overlayPosition.addEventListener("change",()=>{
+  subtitleOverlay.classList.toggle("bottom",overlayPosition.value==="bottom");
+  subtitleOverlay.classList.toggle("center",overlayPosition.value==="center");
+});
+overlayEnabled.addEventListener("change",updateActiveSubtitle);
 
 function renderTimeline(){
   countBox.textContent=`${subtitleData.length} 件`;
@@ -299,16 +341,33 @@ function toSRT(){
   return subtitleData.map((s,i)=>`${i+1}\n${secToSrt(s.startSec)} --> ${secToSrt(s.endSec)}\n${s.text.trim()}`).join("\n\n");
 }
 
-function downloadSRT(){
+async function downloadSRT(){
   if(!subtitleData.length)return;
   const original=videoInput.files[0]?.name||"subtitles.mp4";
-  const base=original.replace(/\.[^/.]+$/,"");
+  const base=original.replace(/\.[^/.]+$/i,"");
+  const filename=`${base}_subtitle.srt`;
   const blob=new Blob(["\uFEFF",toSRT()],{type:"application/x-subrip;charset=utf-8"});
+
+  // iPhone / Android: Web Share API が使える場合は共有シートを優先。
+  // iPhoneでは「ファイルに保存」を選べるため、ブラウザのダウンロード制限を回避しやすい。
+  try{
+    const file=new File([blob],filename,{type:"application/x-subrip"});
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share({files:[file],title:filename,text:"字幕ファイル（SRT）"});
+      status("✅ 共有シートを開きました。iPhoneなら「ファイルに保存」を選べます。","success");
+      return;
+    }
+  }catch(e){
+    if(e?.name==="AbortError")return;
+  }
+
+  // PCなど、通常のダウンロードが使える環境。
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
-  a.href=url;a.download=`${base}_subtitle.srt`;
+  a.href=url;a.download=filename;a.rel="noopener";
   document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+  status("✅ SRTを書き出しました。","success");
 }
 exportButton.addEventListener("click",downloadSRT);
 
