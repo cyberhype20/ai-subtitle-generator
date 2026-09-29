@@ -77,7 +77,7 @@ video{display:block;width:100%;max-height:62vh;background:#000}
     <h1>🎬 Gemini AI 動画字幕翻訳</h1>
     <div class="sub">動画 → Gemini → 字幕編集 → SRT</div>
   </div>
-  <button id="exportBtn" class="secondary" disabled>💾 SRTを保存</button>
+  <div class="header-actions"><button id="copyBtn" class="secondary" disabled>📋 SRTをコピー</button><button id="exportBtn" class="secondary" disabled>💾 SRTを保存</button></div>
 </header>
 
 <div class="grid">
@@ -155,6 +155,7 @@ const videoInput=document.getElementById("video");
 const fileInfo=document.getElementById("fileInfo");
 const startButton=document.getElementById("start");
 const exportButton=document.getElementById("exportBtn");
+const copyButton=document.getElementById("copyBtn");
 const statusBox=document.getElementById("status");
 const progressBar=document.getElementById("progress");
 const player=document.getElementById("player");
@@ -313,18 +314,29 @@ function renderTimeline(){
 function renumber(){subtitleData.forEach((s,i)=>s.id=i+1)}
 
 function parseSRT(srt){
-  const normalized=srt.replace(/\r/g,"").replace(/```srt/gi,"").replace(/```/g,"").trim();
-  const blocks=normalized.split(/\n\s*\n/).filter(Boolean);
+  // Geminiが空行を省略したり、タイムコードの区切り方を変えても、
+  // タイムコードを基準に1字幕ずつ切り出す。
+  let normalized=(srt||"")
+    .replace(/\r/g,"")
+    .replace(/```(?:srt|text)?/gi,"")
+    .replace(/```/g,"")
+    .trim();
+  const cueRe=/(\d{2}:\d{2}:\d{2}[,.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.]\d{3})/g;
+  const matches=[...normalized.matchAll(cueRe)];
   const result=[];
-  for(const block of blocks){
-    const lines=block.split("\n").map(x=>x.trimEnd());
-    const ti=lines.findIndex(x=>/^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}$/.test(x.trim()));
-    if(ti<0)continue;
-    const parts=lines[ti].split(/\s*-->\s*/);
-    const text=lines.slice(ti+1).join("\n").trim();
+  for(let i=0;i<matches.length;i++){
+    const m=matches[i];
+    const textStart=m.index+m[0].length;
+    const textEnd=i+1<matches.length?matches[i+1].index:normalized.length;
+    let text=normalized.slice(textStart,textEnd).trim();
+    // 次の字幕番号が本文側に残った場合は除去
+    text=text.replace(/^\s*\d+\s*\n/,'').trim();
     if(!text)continue;
-    const start=parts[0].trim(),end=parts[1].trim();
-    result.push({id:result.length+1,start,startSec:srtToSec(start),end,endSec:srtToSec(end),text});
+    const start=m[1].replace('.',',');
+    const end=m[2].replace('.',',');
+    const startSec=srtToSec(start), endSec=srtToSec(end);
+    if(!Number.isFinite(startSec)||!Number.isFinite(endSec)||endSec<=startSec)continue;
+    result.push({id:result.length+1,start,startSec,end,endSec,text});
   }
   if(!result.length)throw new Error("Geminiから正しいSRT形式の字幕を取得できませんでした。");
   return result;
@@ -342,34 +354,62 @@ function toSRT(){
 }
 
 async function downloadSRT(){
-  if(!subtitleData.length)return;
+  if(!subtitleData.length){status("⚠️ 先に字幕を生成してください。","error");return;}
   const original=videoInput.files[0]?.name||"subtitles.mp4";
   const base=original.replace(/\.[^/.]+$/i,"");
   const filename=`${base}_subtitle.srt`;
-  const blob=new Blob(["\uFEFF",toSRT()],{type:"application/x-subrip;charset=utf-8"});
+  const content="\uFEFF"+toSRT();
+  // iPhone/Androidでは text/plain のFileの方が共有シートとの互換性が高い。
+  const blob=new Blob([content],{type:"text/plain;charset=utf-8"});
 
-  // iPhone / Android: Web Share API が使える場合は共有シートを優先。
-  // iPhoneでは「ファイルに保存」を選べるため、ブラウザのダウンロード制限を回避しやすい。
+  // 1) スマホ：共有シート→「ファイルに保存」
   try{
-    const file=new File([blob],filename,{type:"application/x-subrip"});
-    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
-      await navigator.share({files:[file],title:filename,text:"字幕ファイル（SRT）"});
-      status("✅ 共有シートを開きました。iPhoneなら「ファイルに保存」を選べます。","success");
+    const file=new File([blob],filename,{type:"text/plain"});
+    const canShareFiles=!!navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}));
+    if(canShareFiles){
+      await navigator.share({files:[file],title:filename});
+      status("✅ 共有しました。iPhoneなら共有先から「ファイルに保存」を選べます。","success");
       return;
     }
   }catch(e){
     if(e?.name==="AbortError")return;
   }
 
-  // PCなど、通常のダウンロードが使える環境。
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;a.download=filename;a.rel="noopener";
-  document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),2000);
-  status("✅ SRTを書き出しました。","success");
+  // 2) 通常のブラウザ保存（PC/Androidなど）
+  try{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=filename;a.rel="noopener";
+    a.style.display="none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{a.remove();URL.revokeObjectURL(url)},1500);
+    status("✅ SRTの保存を開始しました。","success");
+    return;
+  }catch(e){}
+
+  // 3) 最後の保険：SRT本文をコピーして、メモ/ファイルアプリへ保存できるようにする。
+  try{
+    await navigator.clipboard.writeText(toSRT());
+    status("📋 自動保存が使えないブラウザでした。SRT本文をコピーしました。メモ等に貼り付けて「.srt」で保存してください。","success");
+  }catch(e){
+    status("⚠️ このブラウザでは自動保存が制限されています。「SRTをコピー」を使って保存してください。","error");
+  }
+}
+
+async function copySRT(){
+  if(!subtitleData.length){status("⚠️ 先に字幕を生成してください。","error");return;}
+  try{
+    await navigator.clipboard.writeText(toSRT());
+    status("📋 SRT本文をコピーしました。","success");
+  }catch(e){
+    const ta=document.createElement("textarea");
+    ta.value=toSRT();document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();
+    status("📋 SRT本文をコピーしました。","success");
+  }
 }
 exportButton.addEventListener("click",downloadSRT);
+copyButton.addEventListener("click",copySRT);
 
 function createClient(apiKey){return new GoogleGenAI({apiKey})}
 
@@ -460,6 +500,8 @@ startButton.addEventListener("click",async()=>{
     if(!video.type.startsWith("video/"))throw new Error("動画ファイルを選択してください。");
 
     subtitleData=[];
+    exportButton.disabled=true;
+    copyButton.disabled=true;
     renderTimeline();
     progress(0);
 
@@ -473,6 +515,8 @@ startButton.addEventListener("click",async()=>{
     const srt=cleanSRT(raw);
     subtitleData=parseSRT(srt);
     renderTimeline();
+    exportButton.disabled=false;
+    copyButton.disabled=false;
     progress(100);
     status(`✅ 字幕を読み込みました。\n\n${subtitleData.length}件の字幕を編集できます。\n必要なら「SRTを書き出す」から保存してください。`,"success");
   }catch(error){
